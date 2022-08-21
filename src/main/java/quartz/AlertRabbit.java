@@ -3,6 +3,7 @@ package quartz;
 import org.quartz.*;
 import org.quartz.impl.StdSchedulerFactory;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.sql.*;
 import java.time.LocalDateTime;
@@ -14,10 +15,7 @@ import static org.quartz.SimpleScheduleBuilder.*;
 
 public class AlertRabbit {
 
-    private static Properties properties;
-    private static Connection connection;
-
-    private Connection initConnection() throws SQLException, ClassNotFoundException {
+    private Connection initConnection(Properties properties) throws SQLException, ClassNotFoundException {
         Class.forName(properties.getProperty("driver"));
         return DriverManager.getConnection(
                 properties.getProperty("url"),
@@ -25,23 +23,32 @@ public class AlertRabbit {
                 properties.getProperty("password"));
     }
 
-    public void getProperties() {
+    public Properties getProperties() {
+        Properties properties = new Properties();
         try (InputStream in = AlertRabbit.class.getClassLoader().getResourceAsStream("rabbit.properties")) {
-            properties = new Properties();
             properties.load(in);
-        } catch (Exception e) {
+        } catch (IOException e) {
             throw new IllegalStateException(e);
         }
+        return properties;
+    }
+
+    private static int getSeconds() {
+        Properties config = new Properties();
+        try (InputStream in =
+                     AlertRabbit.class.getClassLoader().getResourceAsStream("rabbit.properties")) {
+            config.load(in);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return Integer.parseInt(config.getProperty("rabbit.interval"));
     }
 
     public static void main(String[] args) throws SQLException, ClassNotFoundException {
 
         AlertRabbit rabbit = new AlertRabbit();
 
-        rabbit.getProperties();
-        connection = rabbit.initConnection();
-
-        try {
+        try (Connection connection =  rabbit.initConnection(rabbit.getProperties())) {
             Scheduler scheduler = StdSchedulerFactory.getDefaultScheduler();
             scheduler.start();
             JobDataMap data = new JobDataMap();
@@ -50,7 +57,7 @@ public class AlertRabbit {
                     .usingJobData(data)
                     .build();
             SimpleScheduleBuilder times = simpleSchedule()
-                    .withIntervalInSeconds(5)
+                    .withIntervalInSeconds(getSeconds())
                     .repeatForever();
             Trigger trigger = newTrigger()
                     .startNow()
