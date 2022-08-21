@@ -33,22 +33,13 @@ public class AlertRabbit {
         return properties;
     }
 
-    private static int getSeconds() {
-        Properties config = new Properties();
-        try (InputStream in =
-                     AlertRabbit.class.getClassLoader().getResourceAsStream("rabbit.properties")) {
-            config.load(in);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        return Integer.parseInt(config.getProperty("rabbit.interval"));
-    }
-
     public static void main(String[] args) throws SQLException, ClassNotFoundException {
 
         AlertRabbit rabbit = new AlertRabbit();
 
-        try (Connection connection =  rabbit.initConnection(rabbit.getProperties())) {
+        Properties properties = rabbit.getProperties();
+
+        try (Connection connection =  rabbit.initConnection(properties)) {
             Scheduler scheduler = StdSchedulerFactory.getDefaultScheduler();
             scheduler.start();
             JobDataMap data = new JobDataMap();
@@ -57,7 +48,7 @@ public class AlertRabbit {
                     .usingJobData(data)
                     .build();
             SimpleScheduleBuilder times = simpleSchedule()
-                    .withIntervalInSeconds(getSeconds())
+                    .withIntervalInSeconds(Integer.parseInt(properties.getProperty("rabbit.interval")))
                     .repeatForever();
             Trigger trigger = newTrigger()
                     .startNow()
